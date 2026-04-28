@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Todo list</title>
+  <style>
+    :root {
+      font-family: system-ui, Segoe UI, Roboto, sans-serif;
+      background: #0f1419;
+      color: #e6edf3;
+    }
+    body { max-width: 32rem; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-weight: 600; font-size: 1.5rem; margin-bottom: 1rem; }
+    form { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #161b22;
+      color: inherit;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: none;
+      background: #238636;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button.secondary { background: #21262d; color: #c9d1d9; }
+    button.danger { background: #da3633; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #21262d;
+      margin-bottom: 0.5rem;
+      background: #161b22;
+    }
+    li.done span { text-decoration: line-through; opacity: 0.6; }
+    span.text { flex: 1; }
+    .err { color: #f85149; font-size: 0.875rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Todo list</h1>
+  <form id="add-form">
+    <input type="text" id="text" placeholder="New task…" autocomplete="off" />
+    <button type="submit">Add</button>
+  </form>
+  <p id="err" class="err" hidden></p>
+  <ul id="list"></ul>
+  <script>
+    const listEl = document.getElementById("list");
+    const errEl = document.getElementById("err");
+    const api = () => `${window.location.origin}/api/todos`;
+
+    function showErr(msg) {
+      errEl.textContent = msg || "";
+      errEl.hidden = !msg;
+    }
+
+    async function load() {
+      showErr("");
+      const r = await fetch(api());
+      if (!r.ok) throw new Error("Failed to load todos");
+      return r.json();
+    }
+
+    function render(items) {
+      listEl.innerHTML = "";
+      for (const t of items) {
+        const li = document.createElement("li");
+        li.className = t.done ? "done" : "";
+        const span = document.createElement("span");
+        span.className = "text";
+        span.textContent = t.text;
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "secondary";
+        toggle.textContent = t.done ? "Undo" : "Done";
+        toggle.addEventListener("click", async () => {
+          try {
+            showErr("");
+            const r = await fetch(api(), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "toggle", id: t.id }),
+            });
+            if (!r.ok) throw new Error(await r.text());
+            const data = await r.json();
+            render(data);
+          } catch (e) {
+            showErr(String(e.message || e));
+          }
+        });
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "danger";
+        del.textContent = "Delete";
+        del.addEventListener("click", async () => {
+          try {
+            showErr("");
+            const r = await fetch(api(), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "delete", id: t.id }),
+            });
+            if (!r.ok) throw new Error(await r.text());
+            const data = await r.json();
+            render(data);
+          } catch (e) {
+            showErr(String(e.message || e));
+          }
+        });
+        li.appendChild(span);
+        li.appendChild(toggle);
+        li.appendChild(del);
+        listEl.appendChild(li);
+      }
+    }
+
+    document.getElementById("add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("text");
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        showErr("");
+        const r = await fetch(api(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "add", text }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        input.value = "";
+        render(await r.json());
+      } catch (err) {
+        showErr(String(err.message || err));
+      }
+    });
+
+    load().then(render).catch((e) => showErr(String(e.message || e)));
+  </script>
+</body>
+</html>
